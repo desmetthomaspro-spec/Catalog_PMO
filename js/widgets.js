@@ -81,6 +81,14 @@ const STICKY_SCENES = {
     rochers: {x:60, y:58, w:36, h:36},
   },
   quadrant: {}, // calculé dynamiquement (2x2), voir computeRegions
+  ishikawa: {
+    mo:  {x:3,  y:3,  w:27, h:32},
+    me:  {x:33, y:3,  w:27, h:32},
+    ma:  {x:63, y:3,  w:27, h:32},
+    mi:  {x:3,  y:65, w:27, h:32},
+    mt:  {x:33, y:65, w:27, h:32},
+    mes: {x:63, y:65, w:27, h:32},
+  },
 };
 
 function speedboatDecor(){
@@ -107,6 +115,26 @@ function speedboatDecor(){
     <g fill="none" stroke="var(--warn)" stroke-width="1.8" opacity=".6">
       <path d="M74,88 L80,76 L88,88 Z"/>
       <path d="M86,94 L91,85 L98,94 Z"/>
+    </g>
+  `;
+  return svg;
+}
+
+function ishikawaDecor(){
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 100 100');
+  svg.setAttribute('preserveAspectRatio','none');
+  svg.setAttribute('class','sticky-scene');
+  svg.innerHTML = `
+    <line x1="4" y1="50" x2="88" y2="50" stroke="var(--ink)" stroke-width="1.6"/>
+    <path d="M88,50 L98,42 L98,58 Z" fill="var(--fam-color)" opacity=".55" stroke="var(--ink)" stroke-width="1.2" stroke-linejoin="round"/>
+    <g stroke="var(--line)" stroke-width="1.4" opacity=".8">
+      <line x1="18" y1="35" x2="30" y2="50"/>
+      <line x1="48" y1="35" x2="58" y2="50"/>
+      <line x1="78" y1="35" x2="70" y2="50"/>
+      <line x1="18" y1="65" x2="30" y2="50"/>
+      <line x1="48" y1="65" x2="58" y2="50"/>
+      <line x1="78" y1="65" x2="70" y2="50"/>
     </g>
   `;
   return svg;
@@ -188,6 +216,7 @@ function renderSticky(root, fiche){
     const canvas = h('div',{class:'sticky-canvas'+(cfg.layout?(' scene-'+cfg.layout):'')});
     if(cfg.layout === 'speedboat') canvas.appendChild(speedboatDecor());
     if(cfg.layout === 'quadrant') canvas.appendChild(quadrantDecor());
+    if(cfg.layout === 'ishikawa') canvas.appendChild(ishikawaDecor());
 
     // migration : anciennes notes sans position libre -> on leur en assigne une
     let migrated = false;
@@ -432,17 +461,14 @@ function renderMatrix(root, fiche){
 
     const wrap = h('div',{class:'matrix-wrap'});
     if(cfg.quadrants && cfg.quadrants.length===4){
-      const positions = [
-        {top:'8px',left:'10px'}, {top:'8px',right:'10px'},
-        {bottom:'8px',left:'10px'}, {bottom:'8px',right:'10px'}
-      ];
+      const positions = ['tl','tr','bl','br'];
       cfg.quadrants.forEach((label,i)=>{
-        const styleStr = Object.entries(positions[i]).map(([k,v])=>`${k}:${v}`).join(';');
-        wrap.appendChild(h('div',{class:'matrix-quadrant-label', style:styleStr},[label]));
+        wrap.appendChild(h('div',{class:'matrix-quadrant-label q-'+positions[i]},[label]));
       });
     }
-    wrap.appendChild(h('div',{class:'matrix-axis-label matrix-axis-x'},[cfg.xLabel||'']));
-    wrap.appendChild(h('div',{class:'matrix-axis-label matrix-axis-y'},[cfg.yLabel||'']));
+    if(state.points.length===0){
+      wrap.appendChild(h('div',{class:'matrix-empty-hint'},['Ajoutez un premier élément ci-dessous, puis glissez-le où il doit être.']));
+    }
 
     state.points.forEach(p=>{
       const del = h('button',{class:'note-del', onclick:(e)=>{ e.stopPropagation(); state.points = state.points.filter(x=>x.id!==p.id); save(); draw(); }},['✕']);
@@ -464,7 +490,12 @@ function renderMatrix(root, fiche){
       });
       wrap.appendChild(pt);
     });
-    root.appendChild(wrap);
+
+    const frame = h('div',{class:'matrix-frame'},[
+      h('div',{class:'matrix-yaxis'},[cfg.yLabel||'']),
+      h('div',{class:'matrix-plot-col'},[wrap, h('div',{class:'matrix-xaxis'},[cfg.xLabel||''])]),
+    ]);
+    root.appendChild(frame);
 
     const input = h('input',{type:'text', placeholder:'Nom de l\u2019élément à placer…'});
     const addBtn = h('button',{onclick:()=>{
