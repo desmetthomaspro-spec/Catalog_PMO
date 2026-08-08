@@ -5,6 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catalogue d'animation PMO — 72 méthodes pour préparer, animer et décider</title>
 <meta name="description" content="Catalogue interactif de 72 méthodes d'animation de réunion et de prise de décision pour PMO et chefs de projet, avec une maquette utilisable pour chaque méthode.">
+<link rel="canonical" href="https://desmetthomaspro-spec.github.io/Catalog_PMO/">
+<meta name="theme-color" content="#1F6F63">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Catalogue d'animation PMO — 72 méthodes pour préparer, animer et décider">
+<meta property="og:description" content="Catalogue interactif de 72 méthodes d'animation de réunion et de prise de décision pour PMO et chefs de projet, avec une maquette utilisable pour chaque méthode.">
+<meta property="og:url" content="https://desmetthomaspro-spec.github.io/Catalog_PMO/">
+<meta property="og:image" content="https://desmetthomaspro-spec.github.io/Catalog_PMO/og-image.png">
+<meta property="og:locale" content="fr_FR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Catalogue d'animation PMO">
+<meta name="twitter:description" content="72 méthodes d'animation de réunion et de décision, avec maquette interactive pour chacune.">
+
+<script>
+/* Applique le thème persisté avant le premier rendu, pour éviter un flash clair→sombre. */
+(function(){
+  try{
+    var t = localStorage.getItem('pmo-theme');
+    if(t === 'dark' || t === 'light'){ document.documentElement.setAttribute('data-theme', t); }
+  }catch(e){}
+})();
+</script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,8 +36,21 @@
 
 <!-- Favicon en data URI : un post-it stylisé, pas de fichier binaire nécessaire -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='3' width='26' height='26' rx='2' fill='%231F6F63'/%3E%3Cpath d='M9 12h14M9 17h10M9 22h7' stroke='%23F3F3EE' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Catalogue d'animation PMO",
+  "description": "Catalogue interactif de 72 méthodes d'animation de réunion et de prise de décision pour PMO et chefs de projet.",
+  "url": "https://desmetthomaspro-spec.github.io/Catalog_PMO/",
+  "inLanguage": "fr"
+}
+</script>
 </head>
 <body>
+
+<a class="skip-link" href="#view">Aller au contenu principal</a>
 
 <header class="masthead">
   <div class="masthead-inner">
@@ -23,20 +58,21 @@
       <span class="brand-mark">PMO</span>
       <span class="brand-title"><a href="#/">Catalogue d'animation</a></span>
     </div>
-    <nav>
+    <nav aria-label="Navigation principale">
       <a href="#/" data-section="catalogue">Catalogue</a>
       <a href="#/aide" data-section="aide" class="nav-cta">🧭 Aide au choix</a>
       <a href="#/anti-patterns" data-section="anti-patterns">Anti-patterns</a>
       <a href="#/annexe" data-section="annexe">Annexe</a>
       <a href="#/reunion" data-section="reunion" class="nav-cta" id="nav-reunion">🗂 Ma réunion</a>
     </nav>
+    <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Basculer entre thème clair et sombre" aria-pressed="false" title="Thème clair / sombre">🌙</button>
   </div>
   <div class="masthead-families" id="masthead-families">
     <!-- rempli par js/app.js : accès direct aux 8 familles depuis n'importe quelle page -->
   </div>
 </header>
 
-<main id="view">
+<main id="view" tabindex="-1">
   <!-- rendu dynamique par js/app.js -->
 </main>
 
