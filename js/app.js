@@ -47,6 +47,40 @@ function setActiveNav(section){
   });
 }
 
+// ---------------------------------------------------------
+// Masthead — accès direct aux 8 familles depuis n'importe quelle page
+// ---------------------------------------------------------
+function buildMastheadFamilies(){
+  const wrap = document.getElementById('masthead-families');
+  if(!wrap) return;
+  wrap.innerHTML = '';
+  CATALOG.families.forEach(fam=>{
+    const btn = h('button',{
+      class:'fam-jump', style:`--fam-color:${fam.color}`, title:fam.name+' — '+fam.question,
+      onclick:()=>jumpToFamily(fam.id)
+    },[fam.id]);
+    wrap.appendChild(btn);
+  });
+  updateMastheadFamiliesActive();
+}
+function updateMastheadFamiliesActive(){
+  const wrap = document.getElementById('masthead-families');
+  if(!wrap) return;
+  const onlyOne = state.families.size===1 ? [...state.families][0] : null;
+  wrap.querySelectorAll('.fam-jump').forEach((btn,i)=>{
+    btn.classList.toggle('active', onlyOne===CATALOG.families[i].id);
+  });
+}
+function jumpToFamily(famId){
+  state.families = new Set([famId]);
+  if(location.hash.replace(/^#\/?/,'') !== ''){
+    location.hash = '#/';
+  } else {
+    renderCatalogue();
+  }
+  window.scrollTo(0,0);
+}
+
 function view(){ return document.getElementById('view'); }
 
 // ---------------------------------------------------------
@@ -99,6 +133,7 @@ function renderCatalogue(){
 
   view().innerHTML = '';
   view().appendChild(root);
+  updateMastheadFamiliesActive();
 }
 
 function statEl(n,label){ return h('div',{class:'hero-stat'},[h('b',{},[String(n)]), h('span',{},[label])]); }
@@ -147,19 +182,20 @@ function buildToolbar(count){
   coreLabel.appendChild(coreCb); coreLabel.appendChild(document.createTextNode(' Socle recommandé uniquement'));
   filtersRow.appendChild(coreLabel);
 
-  filtersRow.appendChild(selectFilter('Distanciel', state.remote, {all:'Tous', yes:'✅ Natif', degraded:'⚠️ Dégradé', no:'❌ À éviter'}, v=>{ state.remote=v; renderCatalogue(); }));
-  filtersRow.appendChild(selectFilter('Notoriété', state.fame, {all:'Toutes', '3':'●●● Grand public', '2':'●●○ Praticiens', '1':'●○○ Confidentiel'}, v=>{ state.fame=v; renderCatalogue(); }));
+  filtersRow.appendChild(chipFilterGroup('Distanciel', state.remote, {all:'Tous', yes:'✅ Natif', degraded:'⚠️ Dégradé', no:'❌ À éviter'}, v=>{ state.remote=v; renderCatalogue(); }));
+  filtersRow.appendChild(chipFilterGroup('Notoriété', state.fame, {all:'Toutes', '3':'●●● Grand public', '2':'●●○ Praticiens', '1':'●○○ Confidentiel'}, v=>{ state.fame=v; renderCatalogue(); }));
 
   filtersRow.appendChild(h('span',{class:'result-count'},[`${count} fiche${count>1?'s':''}`]));
   wrap.appendChild(filtersRow);
 
   return wrap;
 }
-function selectFilter(label, val, options, onChange){
-  const sel = h('select',{}, Object.entries(options).map(([v,l])=>h('option',{value:v},[l])));
-  sel.value = val;
-  sel.addEventListener('change', ()=>onChange(sel.value));
-  return h('label',{},[label+' ', sel]);
+function chipFilterGroup(label, val, options, onChange){
+  const chipsWrap = h('div',{class:'chip-filter-chips'});
+  Object.entries(options).forEach(([v,l])=>{
+    chipsWrap.appendChild(h('button',{class:'chip small'+(val===v?' active':''), onclick:()=>onChange(v)},[l]));
+  });
+  return h('div',{class:'chip-filter-group'},[h('span',{class:'chip-filter-label'},[label]), chipsWrap]);
 }
 function focusSearch(){ const el = document.querySelector('.search-strip input'); if(el){ el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }
 
@@ -245,6 +281,7 @@ function renderFicheDetail(ref){
     h('button',{class:'tabbtn', id:'tab-maquette', style:`--fam-color:${fam.color}`, onclick:()=>switchTab('maquette',f)},['🧩 Maquette interactive']),
   ]);
   root.appendChild(tabbar);
+  root.appendChild(fichePager(f, fam));
 
   const panelFiche = h('div',{class:'tabpanel active', id:'panel-fiche'},[ficheContentEl(f, fam)]);
   const panelMaquette = h('div',{class:'tabpanel', id:'panel-maquette', style:`--fam-color:${fam.color}`},[]);
@@ -268,6 +305,25 @@ function switchTab(tab, f){
       panel.dataset.built = '1';
     }
   }
+}
+
+function fichePager(f, fam){
+  const siblings = CATALOG.fiches
+    .filter(x=>x.family===f.family)
+    .sort((a,b)=> parseInt(a.ref.slice(1),10) - parseInt(b.ref.slice(1),10));
+  const idx = siblings.findIndex(x=>x.ref===f.ref);
+  const prev = idx>0 ? siblings[idx-1] : null;
+  const next = idx<siblings.length-1 ? siblings[idx+1] : null;
+
+  return h('div',{class:'fiche-pager', style:`--fam-color:${fam.color}`},[
+    prev
+      ? h('a',{class:'pager-link prev', href:'#/fiche/'+prev.ref},[h('span',{class:'pager-dir'},['← Précédente']), h('span',{class:'pager-title'},[prev.ref+' · '+prev.title])])
+      : h('span',{class:'pager-link disabled'},['← Première de la famille']),
+    h('span',{class:'pager-progress'},[`${fam.id} · ${idx+1}/${siblings.length}`]),
+    next
+      ? h('a',{class:'pager-link next', href:'#/fiche/'+next.ref},[h('span',{class:'pager-dir'},['Suivante →']), h('span',{class:'pager-title'},[next.ref+' · '+next.title])])
+      : h('span',{class:'pager-link disabled'},['Dernière de la famille →']),
+  ]);
 }
 
 function specRow(f){
@@ -392,4 +448,5 @@ function renderAnnexePage(){
 // ---------------------------------------------------------
 // Boot
 // ---------------------------------------------------------
+buildMastheadFamilies();
 router();

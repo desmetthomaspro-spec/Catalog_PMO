@@ -351,11 +351,20 @@ function renderVote(root, fiche){
 
   function drawScale(){
     const labels = cfg.scaleLabels || [];
+    const votesForHisto = state.scaleVotes||[];
+    const counts = {};
+    votesForHisto.forEach(v=>{ counts[v]=(counts[v]||0)+1; });
+    const maxCount = Math.max(1, ...Object.values(counts));
     root.appendChild(h('div',{class:'widget-info'},['Chaque clic simule un votant qui lève la main simultanément.']));
     const row = h('div',{class:'scale-row'});
     for(let i=0;i<=cfg.scaleMax;i++){
-      const col = h('div',{style:'flex:1;'});
-      col.appendChild(h('button',{class:'scale-btn', style:'width:100%;', onclick:()=>{ state.scaleVotes.push(i); save(); draw(); }},[String(i)]));
+      const count = counts[i]||0;
+      const col = h('div',{class:'scale-col'});
+      col.appendChild(h('div',{class:'scale-histo'},[
+        count ? h('span',{class:'scale-histo-count'},[String(count)]) : null,
+        h('div',{class:'scale-histo-bar', style:`height:${count?Math.max(12,(count/maxCount)*100):0}%`}),
+      ]));
+      col.appendChild(h('button',{class:'scale-btn', onclick:()=>{ state.scaleVotes.push(i); save(); draw(); }},[String(i)]));
       if(labels[i]) col.appendChild(h('div',{class:'scale-caption'},[labels[i]]));
       row.appendChild(col);
     }
@@ -393,12 +402,19 @@ function renderVote(root, fiche){
 
   function drawBudget(){
     state.budgetLeft = state.budgetLeft===undefined ? (cfg.defaultBudget||100) : state.budgetLeft;
+    const total = cfg.defaultBudget||100;
     root.appendChild(h('div',{class:'widget-info'},['Budget commun du groupe : négociez ensemble ce que vous achetez.']));
-    root.appendChild(h('div',{class:'vote-budget-bar'},[`Budget restant : ${state.budgetLeft}`]));
+    root.appendChild(h('div',{class:'budget-gauge-wrap'},[
+      h('div',{class:'budget-gauge'},[h('div',{class:'budget-gauge-fill', style:`width:${Math.min(100,((total-state.budgetLeft)/total)*100)}%`})]),
+      h('div',{class:'budget-gauge-label'},[`${state.budgetLeft} / ${total} pts restants`]),
+    ]));
+    const shop = h('div',{class:'budget-shop'});
     state.options.forEach(o=>{
       const bought = !!state.purchased[o.id];
-      root.appendChild(h('div',{class:'vote-option'},[
-        h('span',{class:'label'},[o.label + '  —  '+ (o.price||0)+' pts']),
+      const affordable = bought || (o.price||0) <= state.budgetLeft;
+      shop.appendChild(h('div',{class:'budget-tile'+(bought?' bought':'')+(affordable?'':' unaffordable')},[
+        h('span',{class:'budget-tile-price'},[(o.price||0)+' pts']),
+        h('span',{class:'budget-tile-label'},[o.label]),
         h('button',{class:'btn-primary', style: bought?'background:var(--good);':'', onclick:()=>{
           if(bought){ state.purchased[o.id]=false; state.budgetLeft += (o.price||0); }
           else{ if((o.price||0) > state.budgetLeft) return alert('Budget insuffisant — négociez une alliance ou renoncez.'); state.purchased[o.id]=true; state.budgetLeft -= (o.price||0); }
@@ -406,6 +422,7 @@ function renderVote(root, fiche){
         }},[bought?'Achetée ✓':'Acheter']),
       ]));
     });
+    root.appendChild(shop);
     root.appendChild(optionAdderWithPrice());
   }
   function optionAdderWithPrice(){
@@ -550,9 +567,16 @@ function renderTemplate(root, fiche){
     if(cfg.tableMode){ return drawTable(); }
     if(cfg.cloudMode){ return drawCloud(); }
 
-    const grid = h('div',{class:'template-grid'});
+    const isCanvas = !!cfg.canvasAreas;
+    const grid = h('div',{class: isCanvas ? 'template-grid template-canvas' : 'template-grid'});
+    if(isCanvas){
+      grid.style.gridTemplateAreas = cfg.canvasAreas;
+      grid.style.gridTemplateColumns = `repeat(${cfg.canvasColumns||3}, 1fr)`;
+    }
     cfg.fields.forEach(f=>{
-      grid.appendChild(fieldEl(f));
+      const el = fieldEl(f);
+      if(isCanvas) el.style.gridArea = f.id;
+      grid.appendChild(el);
     });
     root.appendChild(grid);
 
@@ -581,14 +605,17 @@ function renderTemplate(root, fiche){
 
   function fieldEl(f){
     const id = 'f_'+f.id;
-    const label = h('label',{for:id},[f.label]);
+    const dot = h('span',{class:'template-field-dot'},[]);
+    const label = h('label',{for:id, class:'template-field-tab'},[dot, f.label]);
     let input;
     if(f.type==='textarea'){ input = h('textarea',{id, rows:4}); input.value = state.values[f.id]||''; }
     else if(f.type==='select'){
       input = h('select',{id}, (f.options||[]).map(o=>h('option',{value:o},[o])));
       input.value = state.values[f.id]||(f.options||[])[0];
     } else { input = h('input',{type:'text', id}); input.value = state.values[f.id]||''; }
+    dot.classList.toggle('filled', !!input.value);
     input.addEventListener('input', debounce(()=>{ state.values[f.id]=input.value; save(); },250));
+    input.addEventListener('input', ()=> dot.classList.toggle('filled', !!input.value));
     return h('div',{class:'template-field'},[label, input]);
   }
 
@@ -750,15 +777,34 @@ function renderCalculator(root, fiche){
     }catch(e){ return 0; }
   }
 
+  function drawRanking(rowsWithScore, labelKey){
+    const max = Math.max(1, ...rowsWithScore.map(r=>r._score));
+    const wrap = h('div',{class:'calc-ranking'});
+    rowsWithScore.forEach(r=>{
+      const danger = cfg.threshold && r._score >= cfg.threshold;
+      const pct = Math.max(3, (r._score/max)*100);
+      wrap.appendChild(h('div',{class:'calc-rank-row'+(danger?' danger':'')},[
+        h('span',{class:'calc-rank-label'},[r.values[labelKey] || '(sans nom)']),
+        h('div',{class:'calc-rank-bar-wrap'},[h('div',{class:'calc-rank-bar', style:`width:${pct}%`})]),
+        h('span',{class:'calc-rank-score'},[String(Math.round(r._score*100)/100)]),
+      ]));
+    });
+    return wrap;
+  }
+
   function draw(){
     root.innerHTML = '';
     root.appendChild(resetButton(fiche.ref, ()=>{ state = {rows:[]}; draw(); }));
-    const table = h('table',{class:'calc-table'});
-    const head = h('tr',{}, cfg.columns.map(c=>h('th',{},[c.label])).concat([h('th',{},[cfg.resultLabel||'Score']), h('th',{},[''])]));
-    table.appendChild(head);
 
     const rowsWithScore = state.rows.map(r=>({...r, _score: computeScore(r.values)}));
     if(cfg.sortDesc) rowsWithScore.sort((a,b)=>b._score-a._score);
+
+    const labelCol = cfg.columns.find(c=>c.type==='text');
+    if(rowsWithScore.length && labelCol) root.appendChild(drawRanking(rowsWithScore, labelCol.id));
+
+    const table = h('table',{class:'calc-table'});
+    const head = h('tr',{}, cfg.columns.map(c=>h('th',{},[c.label])).concat([h('th',{},[cfg.resultLabel||'Score']), h('th',{},[''])]));
+    table.appendChild(head);
 
     rowsWithScore.forEach((r, idx)=>{
       const orig = state.rows.find(x=>x.id===r.id);
@@ -846,6 +892,22 @@ function renderPughCalculator(root, fiche){
       table.appendChild(tr);
     });
     root.appendChild(table);
+
+    if(scored.length){
+      root.appendChild(h('h4',{style:'font-family:var(--font-mono);font-size:12px;text-transform:uppercase;color:var(--ink-soft);margin:18px 0 8px;'},['3 · Classement']));
+      const max = Math.max(1, ...scored.map(o=>o.total));
+      const ranking = h('div',{class:'calc-ranking'});
+      scored.forEach(o=>{
+        const pct = Math.max(3, (o.total/max)*100);
+        ranking.appendChild(h('div',{class:'calc-rank-row'},[
+          h('span',{class:'calc-rank-label'},[o.name]),
+          h('div',{class:'calc-rank-bar-wrap'},[h('div',{class:'calc-rank-bar', style:`width:${pct}%`})]),
+          h('span',{class:'calc-rank-score'},[String(Math.round(o.total*100)/100)]),
+        ]));
+      });
+      root.appendChild(ranking);
+    }
+
     const optInput = h('input',{type:'text', placeholder:'Nom de l\u2019option…'});
     const addOpt = h('button',{class:'calc-add', onclick:()=>{
       const v = optInput.value.trim(); if(!v) return;
