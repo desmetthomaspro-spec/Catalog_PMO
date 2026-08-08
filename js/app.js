@@ -35,6 +35,8 @@ function router(){
     renderAntiPatternsPage();
   } else if(parts[0] === 'annexe'){
     renderAnnexePage();
+  } else if(parts[0] === 'reunion'){
+    renderReunionPage();
   } else {
     renderCatalogue();
   }
@@ -229,6 +231,7 @@ function buildFamilySection(fam, items){
 }
 
 function ficheCard(f, fam){
+  const selected = isInMeeting(f.ref);
   const card = h('a',{class:'fiche-card', href:'#/fiche/'+f.ref, style:`--fam-color:${fam.color}`},[
     h('div',{class:'card-top'},[
       h('span',{class:'ref-badge'},[f.ref]),
@@ -243,6 +246,10 @@ function ficheCard(f, fam){
     ]),
   ]);
   if(f.core) card.appendChild(h('span',{class:'core-star'},['SOCLE']));
+  card.appendChild(h('button',{
+    class:'meeting-add-btn'+(selected?' selected':''), title: selected?'Retirer de la réunion':'Ajouter à la réunion',
+    onclick:(e)=>{ e.preventDefault(); e.stopPropagation(); toggleMeeting(f.ref); renderCatalogue(); }
+  },[selected?'✓':'+']));
   return card;
 }
 
@@ -270,6 +277,7 @@ function renderFicheDetail(ref){
         h('h1',{},[f.title]),
         h('div',{class:'detail-origin'},[f.origin, '  ·  Notoriété ', dots(f.fame), '  ·  Famille : ', fam.name]),
       ]),
+      meetingToggleButton(f),
     ]),
     specRow(f),
     f.core ? h('div',{class:'core-flag'},['★ Fait partie du socle recommandé — 10 méthodes à maîtriser en priorité']) : null,
@@ -305,6 +313,14 @@ function switchTab(tab, f){
       panel.dataset.built = '1';
     }
   }
+}
+
+function meetingToggleButton(f){
+  const selected = isInMeeting(f.ref);
+  return h('button',{
+    class:'meeting-add-btn-lg'+(selected?' selected':''), style:`--fam-color:${FAM_BY_ID[f.family].color}`,
+    onclick:()=>{ toggleMeeting(f.ref); renderFicheDetail(f.ref); }
+  },[selected?'✓ Dans la réunion':'+ Ajouter à la réunion']);
 }
 
 function fichePager(f, fam){
