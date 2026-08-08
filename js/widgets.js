@@ -63,8 +63,86 @@ function renderWidget(container, fiche){
 }
 
 // ===========================================================
-// 1. STICKY — tableau de post-it en zones
+// 1. STICKY — post-it libres sur un plateau illustré
+//    (mode 'group' = exception : tableau + drag-vers-groupes,
+//    conservé tel quel car incompatible avec le drag libre)
 // ===========================================================
+function clampPct(v){ return Math.max(2, Math.min(96, v)); }
+
+// Positions de régions "sur-mesure" pour les maquettes phares : au lieu
+// d'une grille générique, les zones sont posées à des endroits qui
+// racontent quelque chose (le vent pousse depuis la gauche, l'île est
+// à l'horizon, etc.).
+const STICKY_SCENES = {
+  speedboat: {
+    vent:    {x:2,  y:4,  w:30, h:38},
+    ile:     {x:64, y:4,  w:32, h:28},
+    ancres:  {x:18, y:60, w:36, h:34},
+    rochers: {x:60, y:58, w:36, h:36},
+  },
+  quadrant: {}, // calculé dynamiquement (2x2), voir computeRegions
+};
+
+function speedboatDecor(){
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 100 100');
+  svg.setAttribute('preserveAspectRatio','none');
+  svg.setAttribute('class','sticky-scene');
+  svg.innerHTML = `
+    <path d="M0,60 Q6,56 12,60 T24,60 T36,60 T48,60 T60,60 T72,60 T84,60 T96,60 T108,60" stroke="var(--line)" stroke-width="1.2" fill="none"/>
+    <path d="M0,70 Q6,66 12,70 T24,70 T36,70 T48,70 T60,70 T72,70 T84,70 T96,70 T108,70" stroke="var(--line-soft)" stroke-width="1.2" fill="none"/>
+    <path d="M0,84 Q6,80 12,84 T24,84 T36,84 T48,84 T60,84 T72,84 T84,84 T96,84 T108,84" stroke="var(--line-soft)" stroke-width="1.2" fill="none" opacity=".7"/>
+    <g transform="translate(46,40) scale(0.75)" stroke="var(--ink)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M-14,20 L14,20 L9,27 L-9,27 Z" fill="var(--paper-raised)"/>
+      <line x1="0" y1="20" x2="0" y2="-4"/>
+      <path d="M0,-2 L17,16 L0,16 Z" fill="var(--fam-color)" opacity=".5" stroke="none"/>
+    </g>
+    <g stroke="var(--fam-color)" stroke-width="1.8" stroke-linecap="round" opacity=".65">
+      <line x1="8" y1="16" x2="24" y2="16"/><line x1="20" y1="12.5" x2="24" y2="16"/><line x1="20" y1="19.5" x2="24" y2="16"/>
+      <line x1="5" y1="26" x2="19" y2="26"/><line x1="15" y1="22.5" x2="19" y2="26"/><line x1="15" y1="29.5" x2="19" y2="26"/>
+    </g>
+    <g transform="translate(80,18)" stroke="var(--fam-color)" stroke-width="1.8" fill="none" opacity=".7">
+      <circle r="8"/>
+    </g>
+    <g fill="none" stroke="var(--warn)" stroke-width="1.8" opacity=".6">
+      <path d="M74,88 L80,76 L88,88 Z"/>
+      <path d="M86,94 L91,85 L98,94 Z"/>
+    </g>
+  `;
+  return svg;
+}
+
+function quadrantDecor(){
+  const wrap = document.createDocumentFragment();
+  wrap.appendChild(h('div',{class:'quadrant-line quadrant-line-v'}));
+  wrap.appendChild(h('div',{class:'quadrant-line quadrant-line-h'}));
+  return wrap;
+}
+
+function computeRegions(zones, layout){
+  const regions = {};
+  const n = zones.length;
+  if(layout && STICKY_SCENES[layout] && layout !== 'quadrant' && n === Object.keys(STICKY_SCENES[layout]).length){
+    zones.forEach(z=>{ regions[z.id] = STICKY_SCENES[layout][z.id]; });
+    return regions;
+  }
+  if(layout === 'quadrant' && n === 4){
+    const positions = [ {x:3,y:3,w:45,h:45}, {x:52,y:3,w:45,h:45}, {x:3,y:52,w:45,h:45}, {x:52,y:52,w:45,h:45} ];
+    zones.forEach((z,i)=>{ regions[z.id] = positions[i]; });
+    return regions;
+  }
+  const cols = n<=1?1 : n===2?2 : n===3?3 : n===4?2 : n<=6?3 : 4;
+  const rows = Math.ceil(n/cols);
+  const gap = 3;
+  const cw = (100-gap*(cols+1))/cols;
+  const ch = (100-gap*(rows+1))/rows;
+  zones.forEach((z,i)=>{
+    const col = i%cols, row = Math.floor(i/cols);
+    regions[z.id] = { x: gap+col*(cw+gap), y: gap+row*(ch+gap), w: cw, h: ch };
+  });
+  return regions;
+}
+
 function renderSticky(root, fiche){
   const cfg = fiche.widget;
   const defaults = { notes: [], clusters: [] };
@@ -74,7 +152,6 @@ function renderSticky(root, fiche){
   let timerInterval = null;
 
   function save(){ Store.save(fiche.ref, state); }
-  function rerender(){ draw(); }
 
   function draw(){
     root.innerHTML = '';
@@ -95,25 +172,137 @@ function renderSticky(root, fiche){
       drawTimeline();
       return;
     }
+    if(cfg.mode === 'group'){
+      drawZonesLegacy();
+      root.appendChild(drawClusters());
+      return;
+    }
 
-    const zonesWrap = h('div',{class:'sticky-zones'});
-    (cfg.zones||[]).forEach(zone=>{
+    root.appendChild(drawCanvas());
+    root.appendChild(h('div',{class:'sticky-hint'},['Glissez un post-it n’importe où sur le plateau pour le repositionner.']));
+  }
+
+  function drawCanvas(){
+    const zones = cfg.zones || [];
+    const regions = computeRegions(zones, cfg.layout);
+    const canvas = h('div',{class:'sticky-canvas'+(cfg.layout?(' scene-'+cfg.layout):'')});
+    if(cfg.layout === 'speedboat') canvas.appendChild(speedboatDecor());
+    if(cfg.layout === 'quadrant') canvas.appendChild(quadrantDecor());
+
+    // migration : anciennes notes sans position libre -> on leur en assigne une
+    let migrated = false;
+    state.notes.forEach(n=>{
+      if(n.x===undefined || n.y===undefined){
+        const r = regions[n.zone] || {x:8,y:8,w:30,h:30};
+        n.x = clampPct(r.x + r.w*(0.22+Math.random()*0.56));
+        n.y = clampPct(r.y + r.h*(0.3+Math.random()*0.45));
+        migrated = true;
+      }
+    });
+    if(migrated) save();
+
+    zones.forEach(zone=>{
+      const r = regions[zone.id] || {x:8,y:8,w:30,h:30};
       const notesInZone = state.notes.filter(n=>n.zone===zone.id && !n.clusterId);
-      const zoneEl = h('div',{class:'sticky-zone', 'data-zone':zone.id});
-      let ratioWarn = null;
+      const regionEl = h('div',{class:'sticky-region', style:`left:${r.x}%;top:${r.y}%;width:${r.w}%;height:${r.h}%;`});
+      regionEl.appendChild(h('div',{class:'sticky-region-label'},[zone.label, h('span',{class:'zone-count'},['('+notesInZone.length+')'])]));
       if(cfg.warnRatio && cfg.warnRatio.zone === zone.id){
         const total = state.notes.length || 1;
         const ratio = notesInZone.length/total;
         if(ratio > cfg.warnRatio.max && state.notes.length >= 4){
-          ratioWarn = h('div',{style:'color:var(--warn);font-size:11.5px;margin-top:6px;font-weight:600;'},[cfg.warnRatio.message]);
+          regionEl.appendChild(h('div',{class:'sticky-region-warn'},[cfg.warnRatio.message]));
         }
       }
+      regionEl.appendChild(h('button',{class:'sticky-region-add', type:'button', title:'Ajouter un post-it ici', onclick:()=>{
+        const note = {
+          id: uid(), zone: zone.id, text:'', cut:false, score:null, clusterId:null,
+          x: clampPct(r.x + r.w*(0.28+Math.random()*0.44)),
+          y: clampPct(r.y + r.h*(0.35+Math.random()*0.35)),
+        };
+        state.notes.push(note); save(); draw();
+        requestAnimationFrame(()=>{
+          const el = root.querySelector(`[data-note-id="${note.id}"] .note-text`);
+          if(el){ el.focus(); }
+        });
+      }},['+']));
+      canvas.appendChild(regionEl);
+    });
+
+    state.notes.filter(n=>!n.clusterId).forEach(n=> canvas.appendChild(freeNoteEl(n, canvas)));
+    return canvas;
+  }
+
+  function freeNoteEl(n, canvas){
+    const del = h('button',{class:'note-del', title:'Supprimer', onclick:(e)=>{ e.stopPropagation(); state.notes = state.notes.filter(x=>x.id!==n.id); save(); draw(); }},['✕']);
+    const textSpan = h('span',{class:'note-text', contenteditable:'true', style:'outline:none;display:block;'},[n.text]);
+    textSpan.addEventListener('blur', ()=>{
+      n.text = textSpan.textContent.trim();
+      if(!n.text){ state.notes = state.notes.filter(x=>x.id!==n.id); save(); draw(); return; }
+      textSpan.parentElement.style.outline = (cfg.maxWords && wordCount(n.text) > cfg.maxWords) ? '2px solid var(--warn)' : 'none';
+      save();
+    });
+    textSpan.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); textSpan.blur(); } });
+
+    const note = h('div',{class:'note note-free'+(n.cut?' cut':''), 'data-note-id':n.id, style:`left:${n.x}%;top:${n.y}%;`}, [del, textSpan]);
+
+    if(cfg.mode === 'toggle'){
+      const labels = cfg.toggleLabels || ['Garder','Supprimer'];
+      const btn = h('button',{onclick:(e)=>{ e.stopPropagation(); n.cut = !n.cut; save(); draw(); }},[n.cut?('↺ '+labels[0]):('✕ '+labels[1])]);
+      note.appendChild(h('div',{class:'note-toggle'},[btn]));
+    }
+    if(cfg.mode === 'scored'){
+      const scoreWrap = h('div',{class:'note-score'});
+      for(let i=1;i<=5;i++){
+        scoreWrap.appendChild(h('button',{class:n.score===i?'sel':'', onclick:(e)=>{ e.stopPropagation(); n.score = (n.score===i)?null:i; save(); draw(); }},[String(i)]));
+      }
+      note.appendChild(scoreWrap);
+    }
+
+    note.addEventListener('pointerdown', (e)=>{
+      if(e.target.closest('.note-del, .note-toggle, .note-score')) return;
+      const startX = e.clientX, startY = e.clientY;
+      const rect = canvas.getBoundingClientRect();
+      const maxX = 100 - (note.offsetWidth/rect.width)*100 - 1;
+      const maxY = 100 - (note.offsetHeight/rect.height)*100 - 1;
+      let dragging = false;
+      function move(ev){
+        const dx = ev.clientX-startX, dy = ev.clientY-startY;
+        if(!dragging && Math.hypot(dx,dy) > 6){ dragging = true; note.classList.add('dragging'); }
+        if(dragging){
+          ev.preventDefault();
+          let x = ((ev.clientX-rect.left)/rect.width)*100;
+          let y = ((ev.clientY-rect.top)/rect.height)*100;
+          x = Math.max(1, Math.min(maxX, x)); y = Math.max(1, Math.min(maxY, y));
+          note.style.left = x+'%'; note.style.top = y+'%';
+          n.x = x; n.y = y;
+        }
+      }
+      function up(){
+        document.removeEventListener('pointermove',move);
+        document.removeEventListener('pointerup',up);
+        note.classList.remove('dragging');
+        if(dragging) save();
+      }
+      document.addEventListener('pointermove',move);
+      document.addEventListener('pointerup',up);
+    });
+
+    return note;
+  }
+
+  // --- mode "group" (diagramme d'affinité) : conserve l'ancienne
+  // interaction en boîtes + glisser-déposer HTML5 vers des groupes,
+  // incompatible avec le repositionnement libre ci-dessus.
+  function drawZonesLegacy(){
+    const zonesWrap = h('div',{class:'sticky-zones'});
+    (cfg.zones||[]).forEach(zone=>{
+      const notesInZone = state.notes.filter(n=>n.zone===zone.id && !n.clusterId);
+      const zoneEl = h('div',{class:'sticky-zone', 'data-zone':zone.id});
       zoneEl.appendChild(h('h4',{},[zone.label, h('span',{class:'zone-count'},['('+notesInZone.length+')'])]));
       const notesWrap = h('div',{class:'sticky-notes-wrap'});
       notesInZone.forEach(n=> notesWrap.appendChild(noteEl(n)));
       zoneEl.appendChild(notesWrap);
       zoneEl.appendChild(addRow(zone.id));
-      if(ratioWarn) zoneEl.appendChild(ratioWarn);
 
       zoneEl.addEventListener('dragover', e=>{ e.preventDefault(); zoneEl.classList.add('dragover'); });
       zoneEl.addEventListener('dragleave', ()=> zoneEl.classList.remove('dragover'));
@@ -126,10 +315,6 @@ function renderSticky(root, fiche){
       zonesWrap.appendChild(zoneEl);
     });
     root.appendChild(zonesWrap);
-
-    if(cfg.mode === 'group'){
-      root.appendChild(drawClusters());
-    }
   }
 
   function drawTimeline(){

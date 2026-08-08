@@ -483,6 +483,51 @@ footer.site-footer{
 .add-note-row input{ flex:1; border:1px solid var(--line); border-radius:2px; padding:6px 8px; font-size:13px; background:#fff; color:#1C1B18; }
 .add-note-row button{ background: var(--ink); color: var(--paper-raised); border:none; border-radius:2px; padding:6px 12px; font-size:13px; font-weight:600; }
 .zone-count{ font-family: var(--font-mono); font-size:11px; color: var(--ink-faint); margin-left:6px; }
+
+/* --- sticky : plateau libre (post-it positionnés à la souris/au doigt) --- */
+.sticky-canvas{
+  position: relative; width:100%; min-height: 460px;
+  border: 1.5px solid var(--ink); border-radius: 10px;
+  background: var(--paper-raised);
+  overflow: hidden; margin-bottom: 10px;
+}
+.sticky-canvas.scene-speedboat{
+  background:
+    radial-gradient(circle at 84% 20%, color-mix(in srgb, var(--fam-color) 16%, transparent), transparent 55%),
+    var(--paper-raised);
+}
+.sticky-scene{ position:absolute; inset:0; width:100%; height:100%; z-index:0; pointer-events:none; }
+.quadrant-line{ position:absolute; background: var(--ink); opacity:.16; z-index:0; }
+.quadrant-line-v{ left:50%; top:3%; bottom:3%; width:2px; margin-left:-1px; }
+.quadrant-line-h{ top:50%; left:3%; right:3%; height:2px; margin-top:-1px; }
+
+.sticky-region{
+  position:absolute; z-index:1; box-sizing:border-box;
+  border-radius: 22px;
+  border: 1.5px dashed color-mix(in srgb, var(--fam-color) 55%, var(--line));
+  background: color-mix(in srgb, var(--fam-color) 7%, transparent);
+  padding: 10px 12px 12px;
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px;
+}
+.sticky-region-label{
+  font-family: var(--font-mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.03em;
+  color: var(--ink-soft); font-weight:700; display:flex; align-items:center; gap:6px;
+}
+.sticky-region-warn{ font-size:11px; color: var(--warn); font-weight:600; max-width: 24ch; }
+.sticky-region-add{
+  width:28px; height:28px; border-radius:50%; flex:none; margin-top:auto;
+  border: 1.5px solid color-mix(in srgb, var(--fam-color) 70%, var(--ink)); background: var(--paper-raised); color: var(--fam-color);
+  font-weight:700; font-size:15px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  transition: transform .12s ease, background .12s ease, color .12s ease;
+}
+.sticky-region-add:hover{ transform: scale(1.1); background: var(--fam-color); color:#fff; }
+.sticky-hint{ font-size:12px; color: var(--ink-faint); margin-bottom:16px; }
+
+.note-free{ position:absolute; z-index:2; width: 132px; cursor:grab; touch-action:none; }
+.note-free .note-text{ cursor:text; min-height: 1.3em; }
+.note-free.dragging{ cursor:grabbing; box-shadow: var(--shadow-lift); transition:none; z-index:5; }
+
 .timer-badge{ display:inline-flex; align-items:center; gap:8px; font-family: var(--font-mono); background: var(--ink); color: var(--paper-raised); padding:6px 12px; border-radius:20px; font-size:13px; margin-bottom:14px; }
 .timer-badge button{ background:none; border:1px solid rgba(255,255,255,.4); color:#fff; border-radius:20px; padding:1px 9px; font-size:11px; }
 .clusters-wrap{ margin-top:14px; }
